@@ -1,0 +1,146 @@
+Primero vamos a visualizar brevemente el conjunto de datos con la función *glimpse*: 
+
+```{r}
+glimpse(flights)
+```
+
+
+1. Todos los vuelos que tuvieron  2 o más horas de retraso 
+
+Con *base* se haría:
+```{r}
+flights[flights$dep_delay>=120,  ]
+```
+
+con *tidyverse*:
+```{r}
+delayed <- filter(flights, dep_delay>=102)
+delayed
+```
+
+
+3. Todos los vuelos con destino a Miami ( MIA) 
+
+```{r}
+filter(flights, dest=="MIA")
+```
+
+
+4. Todos los vuelos con destino a Miami con 2 o más horas de retraso
+
+```{r}
+filter(flights, dep_delay>102, dest %in% c("MIA"))
+```
+
+
+5. De todos los vuelos con 2 o más horas de retraso calcula el retraso medio por aeropuerto de destino, la distancia media y el número de vuelos. Guarda el resultado en un nuevo data.frame
+
+Como ya tenía creado *delayed* de los ejercicios anteriores en los que filtramos los vuelos con 2 o más horas de retaso, lo utilizamos para éste; aplicándole el group by y haciendo las operaciones.
+
+```{r}
+ej1 <- delayed  %>% 
+  group_by(dest) %>% 
+  summarise(
+    media_retraso = mean(arr_delay, na.rm = TRUE),
+    distancia_media = mean(distance),
+    numero_vuelos = n()
+    
+  )
+  
+ej1    
+```
+
+
+6. Utiliza `ggplot` sobre el resultado del punto 5 para ver la relación entre el retraso medio y la distancia media, representa en el mismo gráfico el número de vuelos por aeropuerto de destino (recuerda el aesthetic `size`)
+
+```{r}
+ggplot(data=ej1  , aes(x= media_retraso, y = distancia_media)) + geom_point( aes(size=numero_vuelos))
+```
+
+
+**Ejercicio 2**
+
+Utilizando los datasets vistos en clase, `flights`, `weather`, `planes` , etc. Responde a las siguientes cuestiones
+
+1. Del conjunto de datos `flights` filtra los vuelos con aviones que al menos hayan tenido 100 vuelos.
+**Pista:** Join de flights con planes (ver esquema de relaciones para ver cómo se unen ambas tablas)
+
+En primer lugar vamos a unir flights con planes por la variable *tailnum* con un left join:
+
+```{r}
+f1 <- flights %>% 
+  left_join(planes, by = "tailnum" )
+
+f1
+```
+
+El segundo paso es agrupar por tailnum y contar el número de vuelos (= n()), creando f2:
+
+```{r}
+f2 <-  f1 %>% 
+  group_by(tailnum) %>% 
+  summarise(
+    numero_vuelos = n(),
+  )
+f2
+```
+
+Finalmente filtramos para quedarnos con los que hayan realizado 100 o más vuelos con la función *filter*:
+
+```{r}
+f3 <- filter(f2, numero_vuelos>=100)
+f3
+```
+
+```{r}
+(flights_100<- f3 %>% 
+  inner_join(flights, by="tailnum"))
+```
+
+2. En `flights` haciendo group by por: (origin, year, month, day, hour) calcula la media de `dep_delay` y guarda el resultado en un data.frame. Esto nos ha dado para cada **aeropuerto de origen** el retraso medio de salida, en minutos de todos los vuelos que han salido en cada hora de cada día del año. Pero nos queremos quedar con los 30 con mayor retraso medio , para eso hay que utilizarr la función `arrange(desc(variable_a_ordenar))`  y luego hacer un slice. 
+
+Primero vamos a visualizar el número de aeropuertos de origen con los que contamos:
+
+```{r eval=FALSE, include=FALSE}
+flights$origin
+```
+
+Sabiendo que son tres, vamos a realizar la función para obtener la media de retraso por aeropuerto:
+
+```{r}
+(media_delay <-  flights %>% 
+  group_by(origin, year, month, day, hour) %>% 
+  summarise(
+    media_retraso = mean(arr_delay, na.rm = TRUE)  
+  ))
+ 
+```
+
+Primero vamos a realizar el ungroup y luego el arrange con el objetivo de quedarnos con los 30 con mayor retraso
+
+```{r}
+(datos_filtrados <- media_delay  %>% 
+  ungroup() %>%
+  arrange(desc(media_retraso)) %>%  
+  slice(1:30))
+
+```
+
+El dataframe final lo he llamado *datos_filtrados*:
+
+```{r}
+datos_filtrados
+```
+
+Una vez tenga el dataset resultante, cruzar con  `weather`  utilizando semi_join, para quedarte solo con los registros en weather que cruzan con el dataset de flights filtrado.
+Una vez tengas el resultado grafica en la x la variable `precip` , en la y `wind_speed` y como color de los puntos usa `temp`
+
+```{r}
+(resultado <-weather %>% 
+  semi_join(datos_filtrados, by=c("year", "month", "day", "hour")))
+
+ggplot(resultado, aes(x= precip, y = wind_speed)) +
+  geom_point(aes(color=temp))
+```
+
+
