@@ -1,0 +1,231 @@
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE, include=FALSE}
+install.packages("sjPlot")
+install.packages("party")
+```
+
+```{r include=FALSE}
+library(party)
+library(sjPlot)
+library(dplyr)
+library(pROC)
+```
+
+```{r}
+salary <- read.csv("/Users/luciaberlangagarcia/Downloads/datos_regresion_clasificacion(1)/reg_salary.csv")
+```
+
+Observamos la clase de las variables que tenemos en el data set. 
+
+```{r}
+lapply(salary, class)
+```
+
+
+Estudiar la variable Management en función de las variables Experience, Education y Salary.
+
+Contestar las siguientes preguntas.
+
+¿Cómo afecta Experience a Management?
+¿Cómo afecta Education a Management?
+¿Cómo afecta Salary a Management ?
+
+# Modelos de regresión logística
+
+Ajustar un modelo de regresión logística múltiple para explicar la variable Management utilizando como predictoras las otras 3. (sólo efectos principales).
+
+Nota: Al leer el dataset con read.csv, observar que cuando metamos Management en un modelo la categoría que considera como 1 es “no_directivo”, por lo que el modelo lo que hace es modelar la probabilidad de no ser directivo.
+
+```{r}
+summary(salary)
+```
+
+Anteriormente vimos como la varibale "Management" era tratada como categórica. Para comprobar qué valor se toma como 1 utilziamos *constrast*. Observamos que se trata de "no_directivo".
+
+```{r}
+contrasts(salary$Management)
+```
+
+```{r}
+modelo1 <- glm(Management ~ Education + Experience + Salary, family = binomial, data = salary)
+
+summary(modelo1)
+```
+
+
+-Ajustar otro modelo añadiendo la interacción entre Salary y Experience al modelo anterior.
+```{r}
+modelo2 <- glm(Management ~ Education + Experience * Salary, family = binomial, data = salary)
+
+summary(modelo2)
+```
+
+
+-Comparar el primer modelo con el segundo utilizando la función anova y el área bajo la curva ROC. (al ser pocos datos, es opcional utilizar conjunto de test)
+
+```{r}
+
+# Primer modelo
+pred_saturado <- predict(modelo1, newdata = salary, type  = "response")
+
+pROC::auc(response = salary$Management, predictor = pred_saturado)
+```
+
+
+```{r}
+# Segundo modelo
+pred_saturado2 <- predict(modelo2, newdata = salary, type  = "response")
+
+pROC::auc(response = salary$Management, predictor = pred_saturado2)
+```
+
+```{r}
+anova(modelo1, modelo2, test = "Chisq")  # Chi Squared
+```
+
+- Interpretar los coeficientes del modelo que sólo tiene los efectos principales (el primero).
+```{r}
+coef(modelo1)
+
+```
+
+```{r}
+coef(modelo2)
+```
+
+- Gráfico de los efectos del primer modelo, utilizar función plot_model del paquete sjPlot.
+
+
+```{r}
+plot_model(modelo1)
+```
+
+
+```{r}
+plot_model(modelo1, type = "eff")
+```
+
+## Análisis
+
+¿Cómo afecta Experience a Management?
+
+Comprobamos que a mayor experiencia mayor management. La subida al comienzo es más pronunciada, llegando al 50% del management a los 7 años de experiencia aproximadamente. Luego la curva tiene un crecimiento menos acentuado, llegando al máximo del management a los 20 años.
+
+¿Cómo afecta Salary a Management ?
+
+A menor management menor salario.
+
+¿Cómo afecta Education a Management? 
+
+En cuanto a la educación, vemos como la gente con máster se encuentra en puesto superiores, y existen pocos casos por debajo del 50% del management. Los registros con PhD tienen un máximo por encima del 75% del management y un mínimo al rededor de su 20%. Finalmente los registros con bachillerato tienen su máximo escasamente por encima del 75% del management y los mínimos más acentuados de las categorías.
+
+
+
+- Obtener las predicciones del primer modelo.
+
+```{r}
+predict(modelo1, newdata = salary, type = "response")
+```
+
+
+```{r}
+salary %>%
+  mutate(prob = predict(modelo1, newdata = salary, type = "response")) 
+```
+
+# Modelo de árbol
+
+- Utilizando la librería party vista en clase, obtener un modelo de árbol para predecir Management en base a las otras 3 variables.
+
+```{r}
+salary$Management <- as.factor(salary$Management)
+```
+
+```{r}
+#set.seed(155)
+
+#indices <- sample(1:nrow(salario), 0.7*nrow(salario))
+#train_df <- salario[indices, ]
+#test_df <- salario[-indices, ]
+```
+
+```{r}
+m_log <- glm(Management ~  ., family = binomial, data = salary)
+
+summary(m_log)
+```
+
+```{r}
+pred_logist <- predict(m_log, newdata = salary, type  = "response")
+
+pROC::auc(response = salary$Management, predictor = pred_logist)
+```
+
+```{r include=FALSE}
+library("party")
+```
+
+
+
+
+```{r}
+arbol <- ctree(Management ~ ., data = salary)
+arbol
+```
+
+```{r}
+plot(arbol)
+```
+
+```{r}
+predic_arbol <- predict(arbol, newdata = salary)
+
+class(predic_arbol)
+```
+
+```{r}
+head(predic_arbol)
+```
+
+
+```{r}
+predic_arbol[[1]]
+```
+
+```{r}
+predic_arbol[[2]][1]
+```
+
+```{r}
+pred1 <- as.data.frame(lapply(predic_arbol, as.numeric))
+
+head(pred1)
+
+```
+
+```{r}
+as.matrix(pred1)
+```
+
+```{r}
+resultado <- unlist(Map(function(x) x[2], predic_arbol))
+
+salary$probabilidad <- resultado
+```
+
+
+- Obtener el área bajo la curva ROC. ¿Es mejor que los modelos de regresión logística?
+  
+  
+```{r}
+pred_arbol1 <- predict(arbol, type = 'response')
+
+auc(response = salary$Management, predictor = pred_logist )
+```
+
+## Respuesta
+Los valores del auc son los mismos que en el modelo de regresión logística (## Area under the curve: 0.8908)
+
